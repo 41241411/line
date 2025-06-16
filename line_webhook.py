@@ -13,8 +13,8 @@ import threading
 
 app = Flask(__name__)
 
-CHANNEL_ACCESS_TOKEN = 'zhrm3qGUvqKvcoxQCewe3LCWT5HYULuv863JjsAGrDr/MrCgZn6ycfbRiSoncjMnsbkc5vF/48tvo3ZDmtrRJai3nY8JhEBpktoo+mHK9MI8RSMQjW7en1OXrCIvGMMT3uHlVONG6Gn+dJbPbId2/wdB04t89/1O/w1cDnyilFU='
-CHANNEL_SECRET = '7cbaf99b55226d5299d644baeff61efd'
+CHANNEL_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
+CHANNEL_SECRET = os.getenv('CHANNEL_SECRET')
 
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
