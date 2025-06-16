@@ -1,0 +1,14 @@
+torch
+torchvision
+transformers
+transformers-stream-generator
+qwen-vl-utils
+huggingface_hub
+accelerate
+pillow
+opencv-python
+av
+line-bot-sdk
+requests
+beautifulsoup4
+python-dotenv
