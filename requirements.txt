@@ -12,3 +12,4 @@ line-bot-sdk
 requests
 beautifulsoup4
 python-dotenv
+gunicorn
