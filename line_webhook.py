@@ -72,7 +72,7 @@ def handle_message(event):
 
                 if isinstance(result, list):
                     text_lines = [
-                        f"{course['課程名稱']} - 學期分數: {course['學期分數']}"
+                        f"{course['課程名稱']} - 期中分數: {course['期中分數']} - 學期分數: {course['學期分數']}"
                         for course in result
                     ]
                     reply_text = "\n".join(text_lines)
