@@ -20,6 +20,8 @@ CHANNEL_SECRET = '7cbaf99b55226d5299d644baeff61efd'
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
+user_states = {}
+
 @app.route("/callback", methods=["POST"])
 def callback():
     signature = request.headers["X-Line-Signature"]
@@ -34,55 +36,90 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
+    user_id = event.source.user_id
     msg = event.message.text.strip()
 
     if msg == "成績查詢":
-        # 先回覆一則「查詢中請等待」
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="查詢中請等待...")]
-                )
-            )
-        
-        # 查成績
-        student_id = "41241411"
-        password = "$412414Qazwsx"
-        result = login_and_fetch_scores(student_id, password)
+        user_states[user_id] = "awaiting_credentials"
 
-        # 整理成文字
-        if isinstance(result, list):
-            text_lines = []
-            for course in result:
-                line = f"{course['課程名稱']} - 學期分數: {course['學期分數']}"
-                text_lines.append(line)
-            reply_text = "\n".join(text_lines)
-        else:
-            reply_text = "查詢成績時發生錯誤。"
-
-        # 用 Push Message 再發一則真正成績訊息
+        reply_text = "請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
         with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            push_request = PushMessageRequest(
-                to=event.source.user_id,
-                messages=[TextMessage(text=reply_text)]
-            )
-            line_bot_api.push_message(push_message_request=push_request)
-
-    else:
-        reply_text = "請輸入『成績查詢』來查詢你的成績。"
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
+            MessagingApi(api_client).reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[TextMessage(text=reply_text)]
                 )
             )
+        return
+    
+    # 如果使用者先前已輸入「成績查詢」，現在應該給帳密
+    if user_states.get(user_id) == "awaiting_credentials":
+        if "、" in msg:
+            try:
+                student_id, password = msg.split("、")
+                student_id = student_id.strip()
+                password = password.strip()
+
+                with ApiClient(configuration) as api_client:
+                    MessagingApi(api_client).reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="查詢中請稍候...")]
+                        )
+                    )
+
+                result = login_and_fetch_scores(student_id, password)
+
+                if isinstance(result, list):
+                    text_lines = [
+                        f"{course['課程名稱']} - 學期分數: {course['學期分數']}"
+                        for course in result
+                    ]
+                    reply_text = "\n".join(text_lines)
+                else:
+                    reply_text = "查詢成績失敗，請確認帳密是否正確。"
+
+                with ApiClient(configuration) as api_client:
+                    MessagingApi(api_client).push_message(
+                        push_message_request=PushMessageRequest(
+                            to=user_id,
+                            messages=[TextMessage(text=reply_text)]
+                        )
+                    )
+            except Exception:
+                reply_text = "格式錯誤，請輸入正確的帳密（例如：41241411、$412414Qazwsx）"
+                with ApiClient(configuration) as api_client:
+                    MessagingApi(api_client).reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text=reply_text)]
+                        )
+                    )
+        else:
+            reply_text = "請使用全形逗號「、」分隔帳號與密碼。"
+            with ApiClient(configuration) as api_client:
+                MessagingApi(api_client).reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_text)]
+                    )
+                )
+
+        # 清除使用者狀態
+        user_states.pop(user_id, None)
+        return
+
+    # 預設回覆
+    default_reply = "請輸入『成績查詢』來開始查詢流程。"
+    with ApiClient(configuration) as api_client:
+        MessagingApi(api_client).reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=default_reply)]
+            )
+        )
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=8000)
 
 
