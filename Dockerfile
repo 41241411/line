@@ -7,4 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["sh", "-c", "waitress-serve --bind 0.0.0.0:$PORT line_webhook:app"]
+ENV PORT=8080
+CMD ["waitress-serve", "--host=0.0.0.0", "--port=8080", "line_webhook:app"]

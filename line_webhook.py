@@ -126,7 +126,3 @@ def handle_message(event):
                 messages=[TextMessage(text=default_reply)]
             )
         )
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # 使用環境變數 PORT，預設8080
-    app.run(host="0.0.0.0", port=port)
