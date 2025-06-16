@@ -14,3 +14,4 @@ beautifulsoup4
 python-dotenv
 gunicorn
 flask
+waitress
