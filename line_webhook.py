@@ -1,3 +1,4 @@
+import logging
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -10,6 +11,9 @@ from score_bot import login_and_fetch_scores
 from linebot.v3.messaging.models import PushMessageRequest, TextMessage
 import os
 import threading
+
+# 設定 logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 app = Flask(__name__)
 
@@ -24,7 +28,7 @@ user_states = {}
 def async_fetch_and_push(user_id, student_id, password, mode):
     try:
         result = login_and_fetch_scores(student_id, password, mode=mode)
-        print(f"查詢結果: {result}")
+        logging.info(f"查詢結果: {result}")
         if isinstance(result, list) and result:
             text_lines = []
             for course in result[:50]:  # 最多50筆避免過長
@@ -35,6 +39,7 @@ def async_fetch_and_push(user_id, student_id, password, mode):
             reply_text = "查無資料或查詢失敗，請確認帳密或稍後再試。"
 
     except Exception as e:
+        logging.error(f"查詢發生錯誤: {e}", exc_info=True)
         reply_text = f"查詢發生錯誤: {e}"
 
     with ApiClient(configuration) as api_client:
@@ -60,6 +65,7 @@ def callback():
 def handle_message(event):
     user_id = event.source.user_id
     msg = event.message.text.strip()
+    logging.info(f"收到訊息：user_id={user_id}, message={msg}")
 
     if msg in ["成績查詢", "歷年成績查詢"]:
         user_states[user_id] = "latest" if msg == "成績查詢" else "all"
@@ -96,6 +102,7 @@ def handle_message(event):
                 ).start()
 
             except Exception:
+                logging.exception("帳密格式錯誤")
                 reply_text = "請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
                 with ApiClient(configuration) as api_client:
                     MessagingApi(api_client).reply_message(

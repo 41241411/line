@@ -1,3 +1,4 @@
+import logging
 import requests
 from bs4 import BeautifulSoup
 from ocr_model import ocr_image_from_bytes
@@ -7,7 +8,6 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
     base_url = "https://ecare.nfu.edu.tw"
     captcha_url = base_url + "/ext/authimg"
 
-    # 取得驗證碼 + 辨識（最多重試 3 次）
     retry = 0
     captcha_text = ""
     while retry < 3:
@@ -15,18 +15,17 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
             captcha_resp = session.get(captcha_url, timeout=5)
             captcha_resp.raise_for_status()
             captcha_text = ocr_image_from_bytes(captcha_resp.content).strip()
-            print(f"🔍 辨識到的驗證碼：{captcha_text}")
+            logging.info(f"🔍 辨識到的驗證碼：{captcha_text}")
             if len(captcha_text) == 4:
                 break
         except requests.exceptions.RequestException as e:
-            print(f"⚠️ 驗證碼請求失敗：{e}")
+            logging.error(f"⚠️ 驗證碼請求失敗：{e}")
             return "❌ 無法連線到驗證碼伺服器，請稍後再試。"
         retry += 1
 
     if len(captcha_text) != 4:
         return "❌ 驗證碼辨識失敗，請稍後再試。"
 
-    # 登入
     login_url = base_url + "/login/auth"
     payload = {
         "login_acc": student_id,
@@ -41,19 +40,18 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
     try:
         res = session.post(login_url, data=payload, headers=headers, allow_redirects=False, timeout=5)
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ 登入請求失敗：{e}")
+        logging.error(f"⚠️ 登入請求失敗：{e}")
         return "❌ 無法登入系統，請稍後再試。"
 
     if res.status_code != 302:
         return f"❌ 登入失敗，帳號或密碼可能錯誤。"
 
-    # 取得成績頁面
     score_url = base_url + ("/aaiqry/studscore" if mode == "latest" else "/aaiqry/studscore?kind=2")
     try:
         score_resp = session.get(score_url, timeout=5)
         score_resp.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ 成績頁面請求失敗：{e}")
+        logging.error(f"⚠️ 成績頁面請求失敗：{e}")
         return "❌ 無法取得成績頁面，請稍後再試。"
 
     soup = BeautifulSoup(score_resp.text, "html.parser")
@@ -81,7 +79,7 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
                     "學期分數": columns[7].text.strip(),
                     "學期單科班排名": columns[8].text.strip(),
                 }
-            else:  # mode == "all"
+            else:
                 if len(columns) < 7:
                     continue
                 column_data = {
@@ -93,7 +91,7 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
                 }
             result.append(column_data)
         except Exception as e:
-            print(f"⚠️ 資料解析錯誤：{e}")
+            logging.error(f"⚠️ 資料解析錯誤：{e}")
             continue
 
     if not result:
