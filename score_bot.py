@@ -15,6 +15,7 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
             captcha_resp = session.get(captcha_url, timeout=5)
             captcha_resp.raise_for_status()
             captcha_text = ocr_image_from_bytes(captcha_resp.content).strip()
+            print(f"🔍 辨識到的驗證碼：{captcha_text}")
             if len(captcha_text) == 4:
                 break
         except requests.exceptions.RequestException as e:

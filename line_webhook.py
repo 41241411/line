@@ -24,7 +24,7 @@ user_states = {}
 def async_fetch_and_push(user_id, student_id, password, mode):
     try:
         result = login_and_fetch_scores(student_id, password, mode=mode)
-
+        print(f"查詢結果: {result}")
         if isinstance(result, list) and result:
             text_lines = []
             for course in result[:50]:  # 最多50筆避免過長
