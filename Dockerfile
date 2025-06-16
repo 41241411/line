@@ -7,6 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENV PORT=5000
-
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "line_webhook:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT line_webhook:app"]
