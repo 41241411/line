@@ -1,4 +1,3 @@
-# line_webhook.py
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -10,10 +9,10 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from score_bot import login_and_fetch_scores  
 from linebot.v3.messaging.models import PushMessageRequest, TextMessage
 import os
+import threading
 
 app = Flask(__name__)
 
-# 改為你的 LINE 設定
 CHANNEL_ACCESS_TOKEN = 'zhrm3qGUvqKvcoxQCewe3LCWT5HYULuv863JjsAGrDr/MrCgZn6ycfbRiSoncjMnsbkc5vF/48tvo3ZDmtrRJai3nY8JhEBpktoo+mHK9MI8RSMQjW7en1OXrCIvGMMT3uHlVONG6Gn+dJbPbId2/wdB04t89/1O/w1cDnyilFU='
 CHANNEL_SECRET = '7cbaf99b55226d5299d644baeff61efd'
 
@@ -21,6 +20,30 @@ handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
 user_states = {}
+
+def async_fetch_and_push(user_id, student_id, password, mode):
+    try:
+        result = login_and_fetch_scores(student_id, password, mode=mode)
+
+        if isinstance(result, list) and result:
+            text_lines = []
+            for course in result[:50]:  # 最多50筆避免過長
+                line = " - ".join(f"{key}: {value}" for key, value in course.items())
+                text_lines.append(line)
+            reply_text = "\n".join(text_lines)
+        else:
+            reply_text = "查無資料或查詢失敗，請確認帳密或稍後再試。"
+
+    except Exception as e:
+        reply_text = f"查詢發生錯誤: {e}"
+
+    with ApiClient(configuration) as api_client:
+        MessagingApi(api_client).push_message(
+            push_message_request=PushMessageRequest(
+                to=user_id,
+                messages=[TextMessage(text=reply_text)]
+            )
+        )
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -33,15 +56,14 @@ def callback():
         abort(400)
     return "OK"
 
-
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_id = event.source.user_id
     msg = event.message.text.strip()
 
     if msg in ["成績查詢", "歷年成績查詢"]:
-        user_states[user_id] = "awaiting_credentials_latest" if msg == "成績查詢" else "awaiting_credentials_all"
-        reply_text = f"請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
+        user_states[user_id] = "latest" if msg == "成績查詢" else "all"
+        reply_text = "請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
         with ApiClient(configuration) as api_client:
             MessagingApi(api_client).reply_message(
                 ReplyMessageRequest(
@@ -51,15 +73,13 @@ def handle_message(event):
             )
         return
 
-    # 判斷是否輸入帳密
-    if user_id in user_states and user_states[user_id].startswith("awaiting_credentials"):
+    if user_id in user_states:
         if "、" in msg:
             try:
-                student_id, password = msg.split("、")
-                student_id = student_id.strip()
-                password = password.strip()
-                mode = "latest" if "latest" in user_states[user_id] else "all"
+                student_id, password = [x.strip() for x in msg.split("、", 1)]
+                mode = user_states[user_id]
 
+                # 先快速回覆
                 with ApiClient(configuration) as api_client:
                     MessagingApi(api_client).reply_message(
                         ReplyMessageRequest(
@@ -68,27 +88,15 @@ def handle_message(event):
                         )
                     )
 
-                result = login_and_fetch_scores(student_id, password, mode=mode)
+                # 啟動背景執行緒查詢並推播
+                threading.Thread(
+                    target=async_fetch_and_push,
+                    args=(user_id, student_id, password, mode),
+                    daemon=True
+                ).start()
 
-                if isinstance(result, list) and result:
-                    text_lines = []
-                    for course in result[:50]:  # 最多10筆避免過長
-                        line = " - ".join(f"{key}: {value}" for key, value in course.items())
-                        text_lines.append(line)
-                    reply_text = "\n".join(text_lines)
-                else:
-                    reply_text = "查無資料或查詢失敗，請確認帳密或稍後再試。"
-
-                with ApiClient(configuration) as api_client:
-                    MessagingApi(api_client).push_message(
-                        push_message_request=PushMessageRequest(
-                            to=user_id,
-                            messages=[TextMessage(text=reply_text)]
-                        )
-                    )
-
-            except Exception as e:
-                reply_text = "格式錯誤，請輸入正確帳密（例如：41241411、$412414Qazwsx）"
+            except Exception:
+                reply_text = "請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
                 with ApiClient(configuration) as api_client:
                     MessagingApi(api_client).reply_message(
                         ReplyMessageRequest(
@@ -106,11 +114,10 @@ def handle_message(event):
                     )
                 )
 
-        # 結束狀態
         user_states.pop(user_id, None)
         return
 
-    # 預設回應
+    # 預設回覆
     default_reply = "請輸入「成績查詢」或「歷年成績查詢」開始查詢流程。"
     with ApiClient(configuration) as api_client:
         MessagingApi(api_client).reply_message(
@@ -122,5 +129,3 @@ def handle_message(event):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
-
