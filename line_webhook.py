@@ -39,10 +39,9 @@ def handle_message(event):
     user_id = event.source.user_id
     msg = event.message.text.strip()
 
-    if msg == "成績查詢":
-        user_states[user_id] = "awaiting_credentials"
-
-        reply_text = "請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
+    if msg in ["成績查詢", "歷年成績查詢"]:
+        user_states[user_id] = "awaiting_credentials_latest" if msg == "成績查詢" else "awaiting_credentials_all"
+        reply_text = f"請輸入帳密，格式為：學號、密碼（例如：11111111、123456789）"
         with ApiClient(configuration) as api_client:
             MessagingApi(api_client).reply_message(
                 ReplyMessageRequest(
@@ -51,14 +50,15 @@ def handle_message(event):
                 )
             )
         return
-    
-    # 如果使用者先前已輸入「成績查詢」，現在應該給帳密
-    if user_states.get(user_id) == "awaiting_credentials":
+
+    # 判斷是否輸入帳密
+    if user_id in user_states and user_states[user_id].startswith("awaiting_credentials"):
         if "、" in msg:
             try:
                 student_id, password = msg.split("、")
                 student_id = student_id.strip()
                 password = password.strip()
+                mode = "latest" if "latest" in user_states[user_id] else "all"
 
                 with ApiClient(configuration) as api_client:
                     MessagingApi(api_client).reply_message(
@@ -68,16 +68,16 @@ def handle_message(event):
                         )
                     )
 
-                result = login_and_fetch_scores(student_id, password)
+                result = login_and_fetch_scores(student_id, password, mode=mode)
 
-                if isinstance(result, list):
-                    text_lines = [
-                        f"{course['課程名稱']} - 期中分數: {course['期中分數']} - 學期分數: {course['學期分數']}"
-                        for course in result
-                    ]
+                if isinstance(result, list) and result:
+                    text_lines = []
+                    for course in result[:50]:  # 最多10筆避免過長
+                        line = " - ".join(f"{key}: {value}" for key, value in course.items())
+                        text_lines.append(line)
                     reply_text = "\n".join(text_lines)
                 else:
-                    reply_text = "查詢成績失敗，請確認帳密是否正確。"
+                    reply_text = "查無資料或查詢失敗，請確認帳密或稍後再試。"
 
                 with ApiClient(configuration) as api_client:
                     MessagingApi(api_client).push_message(
@@ -86,8 +86,9 @@ def handle_message(event):
                             messages=[TextMessage(text=reply_text)]
                         )
                     )
-            except Exception:
-                reply_text = "格式錯誤，請輸入正確的帳密（例如：41241411、$412414Qazwsx）"
+
+            except Exception as e:
+                reply_text = "格式錯誤，請輸入正確帳密（例如：41241411、$412414Qazwsx）"
                 with ApiClient(configuration) as api_client:
                     MessagingApi(api_client).reply_message(
                         ReplyMessageRequest(
@@ -105,12 +106,12 @@ def handle_message(event):
                     )
                 )
 
-        # 清除使用者狀態
+        # 結束狀態
         user_states.pop(user_id, None)
         return
 
-    # 預設回覆
-    default_reply = "請輸入『成績查詢』來開始查詢流程。"
+    # 預設回應
+    default_reply = "請輸入「成績查詢」或「歷年成績查詢」開始查詢流程。"
     with ApiClient(configuration) as api_client:
         MessagingApi(api_client).reply_message(
             ReplyMessageRequest(
