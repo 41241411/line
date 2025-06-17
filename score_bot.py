@@ -51,7 +51,7 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
 
     if res.status_code != 302:
         # logging.warning("🚫 登入失敗，可能是帳號或密碼錯誤，HTTP 狀態碼：%d", res.status_code)
-        return f"❌ 登入失敗，帳號或密碼可能錯誤。"
+        return f"❌ 登入失敗，帳號、密碼或驗證碼可能錯誤，請再試一次。"
 
     # logging.info("✅ 登入成功，準備進入成績查詢")
 
