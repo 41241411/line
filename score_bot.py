@@ -14,7 +14,8 @@ def login_and_fetch_scores(student_id, password, mode="latest"):
     while retry < 3:
         try:
             logging.info("🔄 嘗試取得驗證碼（第 %d 次）", retry + 1)
-            captcha_resp = session.get(captcha_url, timeout=5)
+            captcha_resp = session.get(captcha_url, timeout=10)
+            logging.info("🔍 captcha_resp：%s", captcha_resp)
             captcha_resp.raise_for_status()
             captcha_text = ocr_image_from_bytes(captcha_resp.content).strip()
             logging.info("🔍 辨識到的驗證碼：%s", captcha_text)
